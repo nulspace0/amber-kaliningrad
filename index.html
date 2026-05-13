@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Янтарные Башни Калининграда</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#020408;
+  display:flex;flex-direction:column;align-items:center;
+  height:100dvh;overflow:hidden;
+  font-family:'Courier New',Courier,monospace;
+  color:#F5DEB3;user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#hud{
+  width:100%;max-width:520px;
+  padding:8px 14px;flex-shrink:0;
+  display:flex;align-items:center;gap:10px;
+  background:rgba(20,8,4,0.82);
+  border-bottom:3px solid #E8820A;
+}
+#hud-count{font-size:16px;color:#F59E0B;white-space:nowrap;font-weight:bold;letter-spacing:1px}
+#hud-name{
+  flex:1;font-size:15px;font-weight:bold;
+  color:#FCD34D;text-align:center;letter-spacing:.5px;
+}
+.miss-wrap{display:flex;gap:6px}
+.mdot{
+  width:16px;height:16px;
+  background:#111;
+  border:2px solid #3a4a60;
+  image-rendering:pixelated;
+}
+.mdot.lit{background:#EF4444;border-color:#FF2222;box-shadow:0 0 5px #EF4444}
+#wrap{flex:1;width:100%;max-width:520px;position:relative;overflow:hidden}
+canvas{
+  display:block;width:100%;height:100%;
+  cursor:pointer;touch-action:none;
+  image-rendering:pixelated;image-rendering:crisp-edges;
+}
+.overlay{
+  display:none;position:absolute;inset:0;
+  align-items:center;justify-content:center;
+  z-index:20;background:rgba(1,3,12,0.88);
+}
+.overlay.on{display:flex}
+.card{
+  background:rgba(14,6,2,0.93);
+  border:3px solid #E8820A;
+  outline:1px solid #6a3400;
+  padding:26px 22px 22px;
+  max-width:360px;width:94%;text-align:center;
+  position:relative;
+  box-shadow:4px 4px 0 #6a3400;
+}
+.card-gem{
+  position:absolute;top:-15px;left:50%;transform:translateX(-50%);
+  background:rgba(14,6,2,0.93);padding:0 10px;
+  font-size:18px;line-height:1;border:2px solid #E8820A;
+}
+.card-img{
+  width:100%;max-height:150px;
+  object-fit:contain;margin-bottom:14px;
+  image-rendering:pixelated;image-rendering:crisp-edges;
+}
+.card-title{font-size:18px;color:#FCD34D;font-weight:bold;line-height:1.4;margin-bottom:7px;letter-spacing:.5px}
+.card-year{font-size:13px;color:#E8820A;margin-bottom:14px;letter-spacing:1px}
+.card-line{width:100%;height:2px;background:#E8820A;margin:0 0 14px;opacity:.35}
+.card-fact{font-size:14px;color:#C8B090;line-height:1.8;margin-bottom:22px}
+.card-btn{
+  display:block;width:100%;padding:13px 0;
+  background:#6a3400;
+  color:#FFF8E7;border:2px solid #E8820A;
+  font-size:14px;font-family:'Courier New',monospace;font-weight:bold;
+  cursor:pointer;letter-spacing:1px;
+}
+.card-btn:hover,.card-btn:active{background:#E8820A;color:#000}
+.victory-stars{font-size:34px;letter-spacing:5px;margin-bottom:14px}
+.tap-hint{
+  position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+  font-size:13px;color:rgba(245,222,179,.45);
+  pointer-events:none;white-space:nowrap;letter-spacing:1.5px;
+}
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="hud-count">0 / 8</div>
+  <div id="hud-name">Музей янтаря</div>
+  <div class="miss-wrap">
+    <div class="mdot" id="d0"></div>
+    <div class="mdot" id="d1"></div>
+    <div class="mdot" id="d2"></div>
+  </div>
+</div>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div class="tap-hint" id="hint">[ НАЖМИТЕ — УЛОЖИТЬ БЛОК ]</div>
+
+  <div class="overlay" id="info-ov">
+    <div class="card">
+      <div class="card-gem">✦</div>
+      <img class="card-img" id="ci-img" src="" alt="">
+      <div class="card-title" id="ct"></div>
+      <div class="card-year" id="cy"></div>
+      <div class="card-line"></div>
+      <div class="card-fact" id="cf"></div>
+      <button class="card-btn" id="cb">СЛЕДУЮЩЕЕ ЗДАНИЕ ▶</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="win-ov">
+    <div class="card">
+      <div class="victory-stars">★★★</div>
+      <div class="card-title">КАЛИНИНГРАД ПОСТРОЕН!</div>
+      <div class="card-year">80 ЛЕТ КАЛИНИНГРАДСКОЙ ОБЛАСТИ</div>
+      <div class="card-line"></div>
+      <div class="card-fact">
+        Вы выстроили все восемь культурных жемчужин Янтарного края.
+        Балтийское море — свидетель: этот город строят с душой!
+      </div>
+      <button class="card-btn" id="wb">▶ ИГРАТЬ СНОВА</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── ДАННЫЕ ЗДАНИЙ ────────────────────────────────────────
+const BUILDINGS = [
+  {
+    name:'Музей янтаря',
+    year:'ОСНОВАН В 1979 ГОДУ',
+    fact:'Единственный в мире специализированный музей янтаря расположен в башне Дона — части средневековых укреплений Кёнигсберга. В коллекции более 14 000 экспонатов, крупнейший кусок весит 4,28 кг.',
+    blocks:8, profile:[176,172,168,164,160,155,149,142],
+    col:['#FDE68A','#D97706','#92400E'], glow:'#F59E0B',
+    img:'images/Amber_Museum.png'
+  },
+  {
+    name:'Кафедральный собор',
+    year:'ПОСТРОЕН В XIV–XV ВЕКЕ',
+    fact:'Кёнигсбергский кафедральный собор — главный символ города. Готический храм на острове Кнайпхоф пережил бомбардировки 1944 года и был полностью восстановлен. В северной башне покоится Иммануил Кант.',
+    blocks:10, profile:[170,168,166,164,162,96,90,84,78,70],
+    col:['#D4C5A0','#A89878','#6B5C3E'], glow:'#C8A96E',
+    img:'images/cathedral.png'
+  },
+  {
+    name:'Драматический театр',
+    year:'ОСНОВАН В 1947 ГОДУ',
+    fact:'Калининградский областной драматический театр — один из первых культурных учреждений области. Здание в стиле классицизма с колонным портиком стало символом возрождения послевоенного города.',
+    blocks:8, profile:[176,174,172,170,168,165,162,158],
+    col:['#F5E6C8','#C8A020','#7A5810'], glow:'#D4A74E',
+    img:'images/Drama_Theater.png'
+  },
+  {
+    name:'Дом искусств',
+    year:'ОТКРЫТ В 1960-Е ГОДЫ',
+    fact:'Дом искусств — советский культурный центр в духе конструктивизма. Перед зданием установлен памятник В.И. Ленину. Здесь проходят выставки, концерты и творческие встречи калининградцев.',
+    blocks:8, profile:[178,178,175,175,172,172,169,169],
+    col:['#D8E0EC','#8090A8','#384860'], glow:'#8899AA',
+    img:'images/House_Arts.png'
+  },
+  {
+    name:'Музей Мирового океана',
+    year:'ОТКРЫТ В 2012 ГОДУ',
+    fact:'Уникальное здание-глобус диаметром 36 метров — один из символов современного Калининграда. Внутри сферы расположены планетарий и выставочные залы. Хорошо виден с набережной Преголи.',
+    blocks:10, profile:[174,172,170,168,166,164,162,160,158,155],
+    col:['#7EC8E3','#2980B9','#1A5276'], glow:'#2E86C1',
+    img:'images/Museum_World_Ocean.png'
+  },
+  {
+    name:'Филиал РГИСИ',
+    year:'ОТКРЫТ В 2023 ГОДУ',
+    fact:'Корпус РГИСИ на Острове Октябрьском — первый театральный вуз в регионе. Выразительный ступенчатый фасад из кортеновской стали стал архитектурным символом нового культурного кластера.',
+    blocks:8, profile:[176,176,150,150,126,126,102,102],
+    col:['#E07840','#B85820','#7D3C11'], glow:'#D4893A',
+    img:'images/RGISI.png'
+  },
+  {
+    name:'Филиал Третьяковской галереи',
+    year:'ОТКРЫВАЕТСЯ В 2025 ГОДУ',
+    fact:'Здание на Острове Октябрьском: широкий горизонтальный корпус с иллюминаторами и высокая узкая башня. Самый западный форпост Третьяковки привезёт шедевры русского искусства к берегу Балтики.',
+    blocks:8, profile:[178,175,172,169,166,60,54,48],
+    col:['#C8D0D8','#6C7A89','#34495E'], glow:'#90A0B0',
+    img:'images/Branch_Tretyakov_Gallery.png'
+  },
+  {
+    name:'Филиал Большого театра',
+    year:'ОТКРЫВАЕТСЯ В 2026 ГОДУ',
+    fact:'Гигантская серебристая изогнутая кровля-парус — самое смелое здание острова Октябрьского. Филиал Большого станет самой западной сценой России и главной доминантой культурного кластера.',
+    blocks:9, profile:[180,176,168,156,140,120,96,68,38],
+    col:['#E8ECF0','#A0AAAA','#606868'], glow:'#AAB7B8',
+    img:'images/Branch_Bolshoi_Theater.png'
+  }
+];
+
+// ─── АУДИО ───────────────────────────────────────────────
+const SFX = {};
+let audioReady = false;
+
+// Состояния амбиентных звуков (море + чайки)
+const AMB = {
+  sea:   { vol:0, target:0, timer:0, sfx:null },
+  gulls: { vol:0, target:0, timer:0, sfx:null },
+};
+
+function initAudio(){
+  try {
+    SFX.bg    = Object.assign(new Audio('sound/Background.mp3'),         {loop:true, volume:0.42});
+    SFX.place = Object.assign(new Audio('sound/foundation_stone.mp3'),   {volume:0.72});
+    SFX.miss  = Object.assign(new Audio('sound/stone_passed.mp3'),       {volume:0.65});
+    SFX.final = Object.assign(new Audio('sound/Melodiya_Final.wav'),     {volume:0.88});
+    AMB.sea.sfx   = Object.assign(new Audio('sound/the sound of the sea.mp3'),  {loop:true, volume:0});
+    AMB.gulls.sfx = Object.assign(new Audio('sound/The_cry_of_seagulls.mp3'),   {loop:true, volume:0});
+  } catch(e){}
+}
+
+// Первый клик пользователя — разблокируем Web Audio
+function unlockAudio(){
+  if(audioReady) return;
+  audioReady = true;
+  try {
+    SFX.bg.play().catch(()=>{});
+    AMB.sea.sfx.play().catch(()=>{});
+    AMB.gulls.sfx.play().catch(()=>{});
+  } catch(e){}
+  // Первое появление моря — через 5-12с, чаек — через 18-32с
+  AMB.sea.timer   = Date.now() + 5000  + Math.random()*7000;
+  AMB.gulls.timer = Date.now() + 18000 + Math.random()*14000;
+}
+
+// Планировщик: когда включать/выключать амбиент
+function scheduleAmb(key){
+  const a     = AMB[key];
+  const other = AMB[key==='sea' ? 'gulls' : 'sea'];
+  if(a.target > 0){
+    // Сейчас играет — планируем затихание, потом пауза 10-25с
+    a.target = 0;
+    a.timer  = Date.now() + 10000 + Math.random()*15000;
+  } else {
+    // Тишина — включаем только если другой фон тихий (не перебиваем)
+    if(other.vol < 0.12){
+      a.target = 0.12 + Math.random()*0.13;            // 12-25% громкости
+      a.timer  = Date.now() + 12000 + Math.random()*20000; // играет 12-32с
+    } else {
+      a.timer  = Date.now() + 5000;                    // другой ещё громкий — ждём 5с
+    }
+  }
+}
+
+// Плавный фейд амбиента — вызывается каждый кадр
+function updateAmb(){
+  if(!audioReady) return;
+  const now = Date.now();
+  ['sea','gulls'].forEach(key=>{
+    const a = AMB[key];
+    const diff = a.target - a.vol;
+    if(Math.abs(diff) > 0.001){
+      a.vol += diff * 0.008;
+      try { a.sfx.volume = Math.max(0, Math.min(1, a.vol)); } catch(e){}
+    }
+    if(now >= a.timer && a.timer > 0) scheduleAmb(key);
+  });
+}
+
+function playSFX(key){
+  if(!audioReady) return;
+  try { const s=SFX[key]; s.currentTime=0; s.play().catch(()=>{}); } catch(e){}
+}
+
+function playFinal(){
+  if(!audioReady) return;
+  try {
+    // Приглушаем фон, чайки и море
+    SFX.bg.volume = 0.12;
+    AMB.sea.target = 0; AMB.gulls.target = 0;
+    SFX.final.currentTime = 0;
+    SFX.final.play().catch(()=>{});
+    SFX.final.onended = ()=>{ try{ SFX.bg.volume=0.42; }catch(e){} };
+  } catch(e){}
+}
+
+initAudio();
+
+// Единый янтарный цвет для всех блоков (highlight, main, shadow)
+const AMBER = ['#F5CC50','#D4920A','#7A4808'];
+
+const BLOCK_H     = 26;
+const MIN_OVERLAP = 10;
+const BASE_SPEED  = 1.8;
+const SPEED_INC   = 0.16;
+const PLATFORM_W  = 200;
+const PLATFORM_H  = 24;
+const MAX_MISSES  = 3;
+
+// ─── CANVAS ──────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('wrap');
+let W = 0, H = 0;
+function resize(){
+  const r = wrap.getBoundingClientRect();
+  W = canvas.width  = r.width;
+  H = canvas.height = r.height;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── ПРЕДЗАГРУЗКА СПРАЙТОВ ───────────────────────────────
+const IMGS = {};
+(function preload(){
+  const all = [...BUILDINGS.map(b=>b.img), 'images/background.png'];
+  all.forEach(src=>{
+    const img=new Image();
+    img.src=src;
+    IMGS[src]=img;
+  });
+})();
+
+// ─── ИГРОВОЕ СОСТОЯНИЕ ───────────────────────────────────
+let G = {};
+
+// Состояния анимации: блоки тают → спрайт проявляется
+let spriteReveal = { alpha:0, active:false };
+let towerAlpha   = 1;
+
+function initGame(){
+  G = {
+    state:'playing',
+    bIdx:0, blocksPlaced:0, misses:0,
+    tower:[], moving:null,
+    particles:[], pieces:[],
+    seagulls:makeGulls(), stars:makeStars(), clouds:makeClouds(),
+    shakeX:0, shakeY:0,
+  };
+  spriteReveal = { alpha:0, active:false };
+  towerAlpha   = 1;
+  updateHUD(); hideOverlays();
+  document.getElementById('hint').style.opacity='1';
+  startBlock();
+}
+
+function building(){ return BUILDINGS[G.bIdx]; }
+function platSurfY(){ return H - 88; }
+function platX()    { return (W - PLATFORM_W) / 2; }
+
+function topSurface(){
+  if(!G.tower.length) return { x:platX(), y:platSurfY(), w:PLATFORM_W };
+  const t = G.tower[G.tower.length-1];
+  return { x:t.x, y:t.y, w:t.w };
+}
+
+// ─── ЛОГИКА БЛОКОВ ───────────────────────────────────────
+function startBlock(){
+  if(G.state !== 'playing') return;
+  const s = topSurface();
+  const b = building();
+  const targetW = b.profile[G.blocksPlaced] ?? s.w;
+  G.moving = {
+    x:-targetW, y:s.y - BLOCK_H, w:targetW, h:BLOCK_H,
+    dir:1, speed:BASE_SPEED + G.blocksPlaced * SPEED_INC
+  };
+}
+
+function dropBlock(){
+  if(G.state !== 'playing' || !G.moving) return;
+  unlockAudio();
+  document.getElementById('hint').style.opacity='0';
+  const m = G.moving, s = topSurface();
+  const lx = Math.max(m.x, s.x);
+  const rx = Math.min(m.x + m.w, s.x + s.w);
+  const ov = rx - lx;
+  if(ov <= MIN_OVERLAP){
+    playSFX('miss');
+    spawnPiece(m.x, m.y, m.w, m.h, 0);
+    G.moving = null; G.misses++;
+    updateHUD();
+    if(G.misses >= MAX_MISSES) scheduleCollapse();
+    else setTimeout(startBlock, 460);
+    return;
+  }
+  if(m.x < s.x)         spawnPiece(m.x,    m.y, s.x-m.x,           m.h, -1);
+  if(m.x+m.w > s.x+s.w) spawnPiece(s.x+s.w,m.y, m.x+m.w-(s.x+s.w),m.h,  1);
+  playSFX('place');
+  G.tower.push({ x:lx, y:m.y, w:ov, h:m.h });
+  G.moving = null; G.blocksPlaced++;
+  spawnSparkles(lx+ov/2, m.y, ov >= s.w*0.92 ? 20 : 7, ov >= s.w*0.92);
+  updateHUD();
+  if(G.blocksPlaced >= building().blocks){
+    G.state = 'info';
+    spriteReveal = { alpha:0, active:true };
+    if(G.bIdx === BUILDINGS.length - 1) playFinal();
+    setTimeout(showCard, 1300);
+  } else {
+    startBlock();
+  }
+}
+
+function scheduleCollapse(){
+  G.state = 'collapsing';
+  G.shakeX = 7; G.shakeY = 6;
+  for(const bl of G.tower)
+    spawnPiece(bl.x,bl.y,bl.w,bl.h,(Math.random()>.5?1:-1)*1.5,true);
+  G.tower = [];
+  setTimeout(()=>{
+    G.misses=0; G.blocksPlaced=0; G.state='playing'; G.pieces=[];
+    updateHUD();
+    document.getElementById('hint').style.opacity='1';
+    startBlock();
+  }, 1800);
+}
+
+// ─── ЧАСТИЦЫ ─────────────────────────────────────────────
+function spawnSparkles(cx,cy,n,perfect){
+  const col='#F5CC50';
+  for(let i=0;i<n;i++){
+    const a=(Math.PI*2*i/n)+Math.random()*.5, sp=1.5+Math.random()*3.5;
+    G.particles.push({
+      x:cx+(Math.random()-.5)*16,y:cy,
+      vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1.2,
+      size:perfect?4+Math.random()*3:2+Math.random()*2,
+      col,life:1
+    });
+  }
+}
+function spawnPiece(x,y,w,h,dirX,scatter){
+  G.pieces.push({
+    x,y,w,h,
+    vx:dirX*(1.5+Math.random()*2),
+    vy:scatter?-2-Math.random()*3:0.5+Math.random(),
+    rot:0,rs:(Math.random()-.5)*.08,alpha:1
+  });
+}
+function updateParticles(){
+  for(let i=G.particles.length-1;i>=0;i--){
+    const p=G.particles[i];
+    p.x+=p.vx;p.y+=p.vy;p.vy+=.12;p.life-=.028;
+    if(p.life<=0) G.particles.splice(i,1);
+  }
+  for(let i=G.pieces.length-1;i>=0;i--){
+    const p=G.pieces[i];
+    p.x+=p.vx;p.y+=p.vy;p.vy+=.35;p.rot+=p.rs;p.alpha-=.016;
+    if(p.alpha<=0) G.pieces.splice(i,1);
+  }
+}
+
+// ─── ФОНОВЫЕ ОБЪЕКТЫ ─────────────────────────────────────
+function makeStars(){
+  const a=[];
+  for(let i=0;i<90;i++) a.push({
+    x:Math.random()*1600,
+    y:6+Math.random()*Math.min(170,H*0.40),
+    sz:Math.random()<0.12?2:1,
+    op:.3+Math.random()*.7,
+    ph:Math.random()*Math.PI*2
+  });
+  return a;
+}
+function makeClouds(){
+  const a=[];
+  for(let i=0;i<6;i++){
+    const cw=55+Math.floor(Math.random()*100);
+    const ch=12+Math.floor(Math.random()*20);
+    a.push({
+      x:Math.random()*(W+300)-100,
+      y:18+Math.random()*130,
+      sp:0.05+Math.random()*0.12,
+      w:cw, h:ch,
+      alpha:0.18+Math.random()*0.28
+    });
+  }
+  return a;
+}
+function makeGulls(){
+  const a=[];
+  for(let i=0;i<6;i++) a.push({
+    x:Math.random()*W,
+    y:0, // вычислим после инициализации H
+    sp:.25+Math.random()*.45,
+    sz:12+Math.floor(Math.random()*10), // крупнее: 12-21px
+    ph:Math.random()*Math.PI*2
+  });
+  return a;
+}
+
+// ─── ГЛАВНАЯ ОТРИСОВКА ───────────────────────────────────
+function drawAll(t){
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if(G.shakeX>0.2||G.shakeY>0.2){
+    ctx.translate(
+      Math.round((Math.random()-.5)*G.shakeX*2),
+      Math.round((Math.random()-.5)*G.shakeY*2)
+    );
+    G.shakeX*=.82; G.shakeY*=.82;
+  }
+
+  drawBackground();
+  drawClouds();
+  drawSeaOverlay(t);
+  drawGulls(t);
+  drawPlatform();
+  drawTower();
+
+  // Анимация: блоки тают, спрайт проявляется
+  if(G.state==='info' && spriteReveal.active){
+    towerAlpha   = Math.max(0, towerAlpha - 0.028);
+    // спрайт начинает появляться когда блоки наполовину растворились
+    if(towerAlpha < 0.5)
+      spriteReveal.alpha = Math.min(1, spriteReveal.alpha + 0.030);
+    drawBuildingSprite(spriteReveal.alpha);
+  }
+
+  drawMoving(t);
+  drawPieces();
+  drawParticles();
+  ctx.restore();
+}
+
+// ── Фоновое изображение (cover-кроп под вертикальный формат) ─
+function drawBackground(){
+  const img=IMGS['images/background.png'];
+  ctx.imageSmoothingEnabled=false;
+  if(!img||!img.complete||!img.naturalWidth){
+    ctx.fillStyle='#3a1855';ctx.fillRect(0,0,W,H);return;
+  }
+  const iw=img.naturalWidth,ih=img.naturalHeight;
+  const scale=Math.max(W/iw,H/ih);
+  const sw=Math.round(iw*scale),sh=Math.round(ih*scale);
+  ctx.drawImage(img,Math.round((W-sw)/2),Math.round((H-sh)/2),sw,sh);
+}
+
+// ── Облака (цвета подобраны под фон) ─────────────────────
+function drawClouds(){
+  for(const c of G.clouds){
+    c.x+=c.sp; if(c.x>W+c.w+20) c.x=-c.w-20;
+    const bx=Math.round(c.x),by=Math.round(c.y);
+    const cw=c.w,ch=c.h;
+    // Высокие облака — фиолетово-лавандовые, низкие — персиково-оранжевые
+    const warm=by>H*0.20;
+    ctx.save();ctx.globalAlpha=c.alpha;
+    ctx.fillStyle=warm?'#c87840':'#9878c0';
+    ctx.fillRect(bx,        by+ch*.50,cw,      ch*.50);
+    ctx.fillRect(bx+cw*.06, by+ch*.20,cw*.30,  ch*.42);
+    ctx.fillRect(bx+cw*.30, by,       cw*.38,  ch*.65);
+    ctx.fillRect(bx+cw*.62, by+ch*.15,cw*.28,  ch*.50);
+    ctx.globalAlpha=c.alpha*0.55;
+    ctx.fillStyle=warm?'#f0b070':'#c8b0e0';
+    ctx.fillRect(bx+cw*.30,by,cw*.38,3);
+    ctx.restore();
+  }
+}
+
+// ── Анимированные волны поверх фона ──────────────────────
+function drawSeaOverlay(t){
+  // Морская полоса начинается примерно на 52% высоты
+  const seaY=Math.round(H*0.525);
+  const waves=[
+    {dy:0,  h:3,step:26,fw:13,wc:'rgba(255,160,60,0.22)',fc:'rgba(255,210,120,0.35)'},
+    {dy:16, h:3,step:30,fw:15,wc:'rgba(100,170,230,0.20)',fc:'rgba(210,235,255,0.28)'},
+    {dy:30, h:2,step:34,fw:17,wc:'rgba(80,140,200,0.15)',fc:null},
+  ];
+  for(const wv of waves){
+    const wy=seaY+wv.dy;
+    const off=Math.floor(t*0.018+wv.dy*0.32)%wv.step;
+    ctx.fillStyle=wv.wc;
+    for(let px=-(wv.step-off);px<W+wv.step;px+=wv.step)
+      ctx.fillRect(Math.round(px),wy,wv.fw,wv.h);
+    if(wv.fc){
+      ctx.fillStyle=wv.fc;
+      for(let px=-(wv.step-off);px<W+wv.step;px+=wv.step)
+        ctx.fillRect(Math.round(px),wy,wv.fw,1);
+    }
+  }
+  // Сверкающие блики заката на воде
+  if(Math.random()<.07){
+    G.particles.push({
+      x:W*0.35+Math.random()*W*0.45,
+      y:seaY+Math.random()*(H-seaY)*0.40,
+      vx:0,vy:-.22,size:3,col:'#FFB040',life:.80
+    });
+  }
+}
+
+// ── Крупные пиксельные чайки (ниже, над морем) ───────────
+function drawGulls(t){
+  for(const g of G.seagulls){
+    // Позиция при первом вызове после resize
+    if(g.y===0) g.y=Math.round(H*0.44+Math.random()*H*0.16);
+    g.x+=g.sp; if(g.x>W+100) g.x=-100;
+    const flap=Math.sin(t*.003+g.ph)>0;
+    const sz=g.sz, bx=Math.round(g.x), by=Math.round(g.y);
+    // Белая чайка с тёмным контуром (Stardew-стиль)
+    // Тело: 4×3 пикселя
+    ctx.fillStyle='rgba(30,20,10,0.55)';
+    ctx.fillRect(bx-2,by+sz+1,6,4);
+    ctx.fillStyle='rgba(255,252,240,0.95)';
+    ctx.fillRect(bx-2,by+sz,6,4);
+    // Левое крыло
+    const lwY=by+(flap?sz-1:sz+2);
+    ctx.fillStyle='rgba(30,20,10,0.40)';
+    ctx.fillRect(bx-sz-1,lwY+1,sz,3);
+    ctx.fillStyle='rgba(255,252,240,0.92)';
+    ctx.fillRect(bx-sz-1,lwY,sz,3);
+    // Правое крыло
+    const rwY=by+(flap?sz-1:sz+2);
+    ctx.fillStyle='rgba(30,20,10,0.40)';
+    ctx.fillRect(bx+3,rwY+1,sz,3);
+    ctx.fillStyle='rgba(255,252,240,0.92)';
+    ctx.fillRect(bx+3,rwY,sz,3);
+  }
+}
+
+// ── Платформа ────────────────────────────────────────────
+function drawPlatform(){
+  const px=Math.round(platX()), py=Math.round(platSurfY());
+  // тень
+  ctx.fillStyle='rgba(0,0,0,0.45)';ctx.fillRect(px+4,py+4,PLATFORM_W,PLATFORM_H);
+  // тело — тёплый песчаный коричневый
+  ctx.fillStyle='#7a4818';ctx.fillRect(px,py,PLATFORM_W,PLATFORM_H);
+  // верхняя грань — светлее
+  ctx.fillStyle='#c08840';ctx.fillRect(px,py,PLATFORM_W,4);
+  // нижняя грань — темнее
+  ctx.fillStyle='#3a1c08';ctx.fillRect(px,py+PLATFORM_H-3,PLATFORM_W,3);
+  // пиксельные швы
+  ctx.fillStyle='rgba(0,0,0,0.20)';
+  for(let i=1;i<8;i++) ctx.fillRect(px+Math.round(i*PLATFORM_W/8),py+4,1,PLATFORM_H-7);
+  // надпись
+  ctx.fillStyle='#f0d060';
+  ctx.font=`bold 11px 'Courier New',monospace`;
+  ctx.textAlign='center';
+  ctx.fillText('ФУНДАМЕНТ',px+PLATFORM_W/2,py+PLATFORM_H-7);
+}
+
+// ── Пиксельный янтарный блок ─────────────────────────────
+function drawBlock(x,y,w,h,alpha){
+  if(w<=0)return;
+  x=Math.round(x);y=Math.round(y);w=Math.round(w);h=Math.round(h);
+  ctx.save();ctx.globalAlpha=alpha;ctx.imageSmoothingEnabled=false;
+  // Основная заливка — янтарь
+  ctx.fillStyle=AMBER[1];ctx.fillRect(x,y,w,h);
+  // Светлая верхняя и левая грань
+  ctx.fillStyle=AMBER[0];ctx.fillRect(x,y,w,3);ctx.fillRect(x,y,2,h);
+  // Тёмная нижняя и правая грань
+  ctx.fillStyle=AMBER[2];ctx.fillRect(x,y+h-3,w,3);ctx.fillRect(x+w-2,y,2,h);
+  // Контур
+  ctx.strokeStyle='rgba(0,0,0,0.55)';ctx.lineWidth=1;
+  ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+  ctx.restore();
+}
+
+function drawTower(){
+  const a = (G.state==='info') ? towerAlpha : 1;
+  for(const b of G.tower) drawBlock(b.x,b.y,b.w,b.h,a);
+}
+
+function drawMoving(t){
+  if(!G.moving)return;
+  const m=G.moving;
+  drawBlock(m.x,m.y+Math.round(Math.sin(t*.003)*.8),m.w,m.h,.80+.20*Math.sin(t*.005));
+}
+
+// ── Спрайт здания (PNG) с анимацией появления ────────────
+function drawBuildingSprite(alpha){
+  const b=building();
+  const img=IMGS[b.img];
+  if(!img||!img.complete||!img.naturalWidth)return;
+
+  ctx.imageSmoothingEnabled=false;
+  const platCX=Math.round(platX()+PLATFORM_W/2);
+  const aspR=img.naturalWidth/img.naturalHeight;
+  const maxW=Math.min(W*0.80,340);
+  const maxH=platSurfY()*0.84;
+  let dw=maxW, dh=dw/aspR;
+  if(dh>maxH){dh=maxH;dw=dh*aspR;}
+  dw=Math.round(dw); dh=Math.round(dh);
+  const dx=Math.round(platCX-dw/2);
+  const dy=Math.round(platSurfY()-dh);
+
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.drawImage(img,dx,dy,dw,dh);
+  ctx.restore();
+}
+
+// ── Частицы и осколки ────────────────────────────────────
+function drawParticles(){
+  for(const p of G.particles){
+    ctx.save();ctx.globalAlpha=p.life;ctx.fillStyle=p.col;
+    const sz=Math.max(1,Math.round(p.size));
+    ctx.fillRect(Math.round(p.x-sz/2),Math.round(p.y-sz/2),sz,sz);
+    ctx.restore();
+  }
+}
+function drawPieces(){
+  for(const p of G.pieces){
+    ctx.save();ctx.globalAlpha=p.alpha;
+    ctx.translate(Math.round(p.x+p.w/2),Math.round(p.y+p.h/2));
+    ctx.rotate(p.rot);
+    ctx.fillStyle=AMBER[1];ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+    ctx.fillStyle=AMBER[0];ctx.fillRect(-p.w/2,-p.h/2,p.w,3);
+    ctx.fillStyle=AMBER[2];ctx.fillRect(-p.w/2,p.h/2-3,p.w,3);
+    ctx.restore();
+  }
+}
+
+// ─── HUD ─────────────────────────────────────────────────
+function updateHUD(){
+  document.getElementById('hud-count').textContent=`${G.bIdx} / 8`;
+  document.getElementById('hud-name').textContent=building().name;
+  for(let i=0;i<3;i++)
+    document.getElementById('d'+i).className='mdot'+(i<G.misses?' lit':'');
+}
+function hideOverlays(){
+  document.getElementById('info-ov').classList.remove('on');
+  document.getElementById('win-ov').classList.remove('on');
+}
+function showCard(){
+  const b=building();
+  document.getElementById('ci-img').src=b.img;
+  document.getElementById('ct').textContent=b.name;
+  document.getElementById('cy').textContent=b.year;
+  document.getElementById('cf').textContent=b.fact;
+  document.getElementById('cb').textContent=
+    G.bIdx>=BUILDINGS.length-1?'▶ ЗАВЕРШИТЬ ИГРУ':'СЛЕДУЮЩЕЕ ЗДАНИЕ ▶';
+  document.getElementById('info-ov').classList.add('on');
+}
+
+document.getElementById('cb').addEventListener('click',()=>{
+  G.bIdx++;
+  if(G.bIdx>=BUILDINGS.length){
+    document.getElementById('info-ov').classList.remove('on');
+    document.getElementById('win-ov').classList.add('on');
+    G.state='victory';return;
+  }
+  document.getElementById('info-ov').classList.remove('on');
+  G.tower=[];G.blocksPlaced=0;G.misses=0;G.moving=null;G.state='playing';
+  spriteReveal={alpha:0,active:false};towerAlpha=1;
+  updateHUD();
+  document.getElementById('hint').style.opacity='1';
+  startBlock();
+});
+document.getElementById('wb').addEventListener('click',()=>{
+  document.getElementById('win-ov').classList.remove('on');
+  // Восстанавливаем фоновую музыку при рестарте
+  try { SFX.bg.volume=0.42; SFX.final.pause(); } catch(e){}
+  initGame();
+});
+
+// ─── INPUT ────────────────────────────────────────────────
+canvas.addEventListener('mousedown',dropBlock);
+canvas.addEventListener('touchstart',e=>{e.preventDefault();dropBlock();},{passive:false});
+
+// ─── ГЛАВНЫЙ ЦИКЛ ─────────────────────────────────────────
+function loop(t){
+  requestAnimationFrame(loop);
+  updateAmb();
+  if(G.state==='playing'&&G.moving){
+    const m=G.moving;
+    m.x+=m.dir*m.speed;
+    if(m.x+m.w>W){m.x=W-m.w;m.dir=-1;}
+    if(m.x<0){m.x=0;m.dir=1;}
+  }
+  updateParticles();
+  ctx.clearRect(0,0,W,H);
+  drawAll(t);
+}
+
+initGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
