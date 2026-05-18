@@ -83,9 +83,35 @@ canvas{
   font-size:13px;color:rgba(245,222,179,.45);
   pointer-events:none;white-space:nowrap;letter-spacing:1.5px;
 }
+#loading{
+  position:fixed;inset:0;z-index:200;
+  background:#020408;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+#load-title{
+  font-size:19px;color:#FCD34D;font-weight:bold;
+  letter-spacing:2px;margin-bottom:8px;text-align:center;line-height:1.6;
+}
+#load-gems{font-size:24px;letter-spacing:6px;margin-bottom:26px;color:#E8820A}
+#load-sub{font-size:11px;color:#C8A070;letter-spacing:2.5px;margin-bottom:18px}
+#load-bar-bg{
+  width:210px;height:14px;
+  background:#0a0604;border:2px solid #E8820A;
+  box-shadow:3px 3px 0 #6a3400;
+}
+#load-bar{height:100%;width:0%;background:#D4920A;transition:width .12s step-start}
+#load-pct{font-size:11px;color:#C8A070;margin-top:9px;letter-spacing:1px}
 </style>
 </head>
 <body>
+
+<div id="loading">
+  <div id="load-title">ЯНТАРНЫЕ БАШНИ<br>КАЛИНИНГРАДА</div>
+  <div id="load-gems">◆ ◆ ◆</div>
+  <div id="load-sub">ЗАГРУЗКА...</div>
+  <div id="load-bar-bg"><div id="load-bar"></div></div>
+  <div id="load-pct">0%</div>
+</div>
 
 <div id="hud">
   <div id="hud-count">0 / 8</div>
@@ -197,6 +223,37 @@ const BUILDINGS = [
   }
 ];
 
+// ─── СИСТЕМА ЗАГРУЗКИ ────────────────────────────────────
+let _loadTotal = 0;
+let _loadDone  = 0;
+let _gameStarted = false;
+
+function _onAssetLoad(){
+  _loadDone = Math.min(_loadDone + 1, _loadTotal);
+  const pct = _loadTotal > 0 ? Math.round(_loadDone / _loadTotal * 100) : 100;
+  const bar   = document.getElementById('load-bar');
+  const pctEl = document.getElementById('load-pct');
+  if(bar)   bar.style.width = pct + '%';
+  if(pctEl) pctEl.textContent = pct + '%';
+  if(_loadDone >= _loadTotal && _loadTotal > 0 && !_gameStarted) _startGame();
+}
+
+function _startGame(){
+  if(_gameStarted) return;
+  _gameStarted = true;
+  const el = document.getElementById('loading');
+  if(el){
+    el.style.transition = 'opacity .45s';
+    el.style.opacity = '0';
+    setTimeout(()=>{ el.style.display='none'; }, 480);
+  }
+  initGame();
+  requestAnimationFrame(loop);
+}
+
+// Страховочный таймер: стартуем через 12с, даже если что-то не загрузилось
+setTimeout(()=>{ if(!_gameStarted) _startGame(); }, 12000);
+
 // ─── АУДИО ───────────────────────────────────────────────
 const SFX = {};
 let audioReady = false;
@@ -208,14 +265,28 @@ const AMB = {
 };
 
 function initAudio(){
-  try {
-    SFX.bg    = Object.assign(new Audio('sound/Background.mp3'),         {loop:true, volume:0.42});
-    SFX.place = Object.assign(new Audio('sound/foundation_stone.mp3'),   {volume:0.72});
-    SFX.miss  = Object.assign(new Audio('sound/stone_passed.mp3'),       {volume:0.65});
-    SFX.final = Object.assign(new Audio('sound/Melodiya_Final.wav'),     {volume:0.88});
-    AMB.sea.sfx   = Object.assign(new Audio('sound/the sound of the sea.mp3'),  {loop:true, volume:0});
-    AMB.gulls.sfx = Object.assign(new Audio('sound/The_cry_of_seagulls.mp3'),   {loop:true, volume:0});
-  } catch(e){}
+  const tracks = [
+    { dest:'sfx', key:'bg',    src:'sound/Background.mp3',             props:{loop:true,  volume:0.42} },
+    { dest:'sfx', key:'place', src:'sound/foundation_stone.mp3',       props:{volume:0.72} },
+    { dest:'sfx', key:'miss',  src:'sound/stone_passed.mp3',           props:{volume:0.65} },
+    { dest:'sfx', key:'final', src:'sound/Melodiya_Final.wav',         props:{volume:0.88} },
+    { dest:'amb', key:'sea',   src:'sound/the sound of the sea.mp3',   props:{loop:true,  volume:0} },
+    { dest:'amb', key:'gulls', src:'sound/The_cry_of_seagulls.mp3',    props:{loop:true,  volume:0} },
+  ];
+  _loadTotal += tracks.length;
+  tracks.forEach(({dest,key,src,props})=>{
+    try {
+      const a = new Audio();
+      a.preload = 'auto';
+      Object.assign(a, props);
+      const done = ()=>_onAssetLoad();
+      a.addEventListener('canplaythrough', done, {once:true});
+      a.addEventListener('error',          done, {once:true});
+      a.src = src; // src после слушателей — браузер начнёт загрузку
+      if(dest==='sfx') SFX[key]      = a;
+      else             AMB[key].sfx  = a;
+    } catch(e){ _onAssetLoad(); }
+  });
 }
 
 // Первый клик пользователя — разблокируем Web Audio
@@ -313,10 +384,13 @@ window.addEventListener('resize', resize);
 const IMGS = {};
 (function preload(){
   const all = [...BUILDINGS.map(b=>b.img), 'images/background.png'];
+  _loadTotal += all.length;
   all.forEach(src=>{
-    const img=new Image();
-    img.src=src;
-    IMGS[src]=img;
+    const img = new Image();
+    img.onload  = _onAssetLoad;
+    img.onerror = _onAssetLoad; // продолжаем даже если файл не нашёлся
+    img.src = src;
+    IMGS[src] = img;
   });
 })();
 
@@ -768,8 +842,7 @@ function loop(t){
   drawAll(t);
 }
 
-initGame();
-requestAnimationFrame(loop);
+// Запуск — через _startGame() после загрузки всех ресурсов
 </script>
 </body>
 </html>
